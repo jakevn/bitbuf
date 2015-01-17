@@ -1,0 +1,7 @@
+[package]
+
+name = "bitbuf"
+description = "An implementation of a bit buffer."
+version = "0.0.1"
+authors = ["Jacob Van Noort <jakevn@gmail.com>"]
+license = "MIT"
