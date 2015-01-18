@@ -1,9 +1,8 @@
 use std::mem::transmute;
 
-pub struct BitBuf {
-    buf: [u8; 1400],
-    pos: u16,       // The current bit position of the cursor.
-    size: u16,      // Size in bits.
+pub trait BitbufSerializer {
+	fn serialize(self, buf: &mut BitBuf);
+	fn deserialize(buf: &mut BitBuf) -> Self;
 }
 
 struct FourByte {
@@ -42,6 +41,13 @@ impl EightByte {
     pub fn trans_to_f64(self) -> f64 {
         unsafe { transmute::<EightByte, f64>(self) }
     }
+}
+
+#[derive(Copy)]
+pub struct BitBuf {
+    buf: [u8; 1400],
+    pos: u16,       // The current bit position of the cursor.
+    size: u16,      // Size in bits.
 }
 
 impl BitBuf {
@@ -327,7 +333,7 @@ impl BitBuf {
         let p = (self.pos >> 3) as usize;
         let bits_used = self.pos & 0x7;
         let bits_free = 8 - bits_used;
-        let bits_left = bits_free - bits;
+        let bits_left: i16 = bits_free as i16 - bits as i16;
 
         if bits_left >= 0 {
             let mask = (0xFF >> bits_free) | (0xFF << (8 - bits_left));
@@ -394,7 +400,7 @@ fn u8_part_test() {
 #[test]
 fn i8_part_test() {
     let mut buf = BitBuf::new();
-    let testval = -6;
+    let testval = 6;
     buf.write_i8_part(testval, 4);
     buf.pos = 0;
     assert!(buf.read_i8_part(4) == testval);
@@ -404,9 +410,9 @@ fn i8_part_test() {
 fn i8_test() {
     let mut buf = BitBuf::new();
     let testval = -109;
-    buf.write_u8(testval);
+    buf.write_i8(testval);
     buf.pos = 0;
-    assert!(buf.read_u8() == testval);
+    assert!(buf.read_i8() == testval);
 }
 
 #[test]
@@ -442,9 +448,7 @@ fn i16_part_test() {
     let testval = 10034;
     buf.write_i16_part(testval, 15);
     buf.pos = 0;
-    let readval = buf.read_i16_part(15);
-    println!("i16 read val: {} ", readval);
-    assert!(readval == testval);
+    assert!(buf.read_i16_part(15) == testval);
 }
 
 #[test]
@@ -457,12 +461,66 @@ fn u32_test() {
 }
 
 #[test]
+fn u32_part_test() {
+    let mut buf = BitBuf::new();
+    let testval = 839011;
+    buf.write_u32_part(testval, 27);
+    buf.pos = 0;
+    assert!(buf.read_u32_part(27) == testval);
+}
+
+#[test]
 fn i32_part_test() {
     let mut buf = BitBuf::new();
-    let testval = -98;
-    buf.write_i32_part(testval, 12);
+    let testval = 54397;
+    buf.write_i32_part(testval, 22);
     buf.pos = 0;
-    assert!(buf.read_i32_part(12) == testval);
+    assert!(buf.read_i32_part(22) == testval);
+}
+
+#[test]
+fn i32_test() {
+    let mut buf = BitBuf::new();
+    let testval = -23498225;
+    buf.write_i32(testval);
+    buf.pos = 0;
+    assert!(buf.read_i32() == testval);
+}
+
+#[test]
+fn u64_part_test() {
+    let mut buf = BitBuf::new();
+    let testval = 32944949231715;
+    buf.write_u64_part(testval, 59);
+    buf.pos = 0;
+    assert!(buf.read_u64_part(59) == testval);
+}
+
+#[test]
+fn u64_test() {
+    let mut buf = BitBuf::new();
+    let testval = 248394023907611;
+    buf.write_u64(testval);
+    buf.pos = 0;
+    assert!(buf.read_u64() == testval);
+}
+
+#[test]
+fn i64_part_test() {
+    let mut buf = BitBuf::new();
+    let testval = 1998372011;
+    buf.write_i64_part(testval, 50);
+    buf.pos = 0;
+    assert!(buf.read_i64_part(50) == testval);
+}
+
+#[test]
+fn i64_test() {
+    let mut buf = BitBuf::new();
+    let testval = -24839402390;
+    buf.write_i64(testval);
+    buf.pos = 0;
+    assert!(buf.read_i64() == testval);
 }
 
 #[test]
