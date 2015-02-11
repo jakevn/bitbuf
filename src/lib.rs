@@ -1,8 +1,13 @@
+#![feature(core)]
+#![feature(test)]
 use std::mem::transmute;
 
-pub trait BitbufSerializer {
-	fn serialize(self, buf: &mut BitBuf);
-	fn deserialize(buf: &mut BitBuf) -> Self;
+pub trait WriteToBitbuf {
+	fn write_to_bitbuf(self, buf: &mut BitBuf);
+}
+
+pub trait FromBitbuf {
+    fn from_bitbuf(buf: &mut BitBuf) -> Self;
 }
 
 struct FourByte {
@@ -42,33 +47,55 @@ impl EightByte {
         unsafe { transmute::<EightByte, f64>(self) }
     }
 }
-
-#[derive(Copy)]
+#[derive(Clone)]
 pub struct BitBuf {
-    buf: [u8; 1400],
-    pos: u16,       // The current bit position of the cursor.
-    size: u16,      // Size in bits.
+    buf: Vec<u8>,
+    pos: usize,       // The current bit position of the cursor.
+    size: usize,      // Size in bits.
 }
 
 impl BitBuf {
 
-    pub fn new() -> BitBuf {
+    /// Creates a new BitBuf, initializing a new Vec<u8>.
+    /// for the underlying buffer.
+    pub fn with_len(len: usize) -> BitBuf {
+        let mut vec = Vec::with_capacity(len);
+        unsafe { vec.set_len(len) };
+        for x in &mut vec { *x = 0; }
         BitBuf {
-            buf: [0u8; 1400],
+            buf: vec,
             pos: 0,
-            size: 1400,
+            size: len * 8,
         }
     }
 
-    pub fn bit_size(&self) -> u16 {
+    /// Consumes the BitBuf, returning the underlying Vec<u8>.
+    pub fn to_vec(self) -> Vec<u8> {
+        self.buf
+    }
+
+    /// Returns a slice into the underlying Vec<u8> buffer.
+    pub fn buf_as_slice(&self) -> &[u8] {
+        self.buf.as_slice()
+    }
+
+    /// The current bit size of the Vec<u8>.
+    pub fn bit_size(&self) -> usize {
         self.size
     }
 
-    pub fn can_write_bits(&self, bit_size: u16) -> bool {
+    /// The current position of the cursor. The BitBuf
+    /// does not insert, and will overwrite any data currently
+    /// at the cursor position during writing.
+    pub fn bit_pos(&self) -> usize {
+        self.pos
+    }
+
+    pub fn can_write_bits(&self, bit_size: usize) -> bool {
         (bit_size + self.pos) < self.size
     }
 
-    pub fn can_read_bits(&self, bit_size: u16) -> bool {
+    pub fn can_read_bits(&self, bit_size: usize) -> bool {
         (bit_size + self.pos) < self.size
     }
 
@@ -88,11 +115,11 @@ impl BitBuf {
         self.read_i8_part(8)
     }
 
-    fn write_i8_part(&mut self, value: i8, bits: u16) {
+    fn write_i8_part(&mut self, value: i8, bits: u8) {
         self.in_write_byte(value as u8, bits);
     }
 
-    fn read_i8_part(&mut self, bits: u16) -> i8 {
+    fn read_i8_part(&mut self, bits: u8) -> i8 {
         self.in_read_byte(bits) as i8
     }
 
@@ -104,11 +131,11 @@ impl BitBuf {
         self.read_u8_part(8)
     }
 
-    pub fn write_u8_part(&mut self, value: u8, bits: u16) {
+    pub fn write_u8_part(&mut self, value: u8, bits: u8) {
         self.in_write_byte(value, bits);
     }
 
-    pub fn read_u8_part(&mut self, bits: u16) -> u8 {
+    pub fn read_u8_part(&mut self, bits: u8) -> u8 {
         self.in_read_byte(bits)
     }
 
@@ -120,21 +147,42 @@ impl BitBuf {
         self.read_u16_part(16)
     }
 
-    fn write_u16_part(&mut self, value: u16, bits: u16) {
-        if bits <= 8 {
-            self.in_write_byte((value & 0xFF) as u8, bits);
-        } else {
-            self.in_write_byte((value & 0xFF) as u8, 8);
-            self.in_write_byte((value >> 8) as u8, bits - 8);
+    pub fn write_u16_part(&mut self, value: u16, bits: u8) {
+        let a = (value >> 0) as u8;
+        let b = (value >> 8) as u8;
+
+        match (bits + 7) / 8 {
+            1 => {
+                self.in_write_byte(a, bits);
+            },
+            2 => {
+                self.in_write_byte(a, 8);
+                self.in_write_byte(b, bits - 8);
+            },
+            _ => {
+                //panic!("Must write between 1 and 32 bits.")
+            }
         }
     }
 
-    fn read_u16_part(&mut self, bits: u16) -> u16 {
-        if bits <= 8 {
-            self.in_read_byte(bits) as u16
-        } else {
-            (self.in_read_byte(8) as u16 | ((self.in_read_byte(bits - 8) as u16) << 8)) as u16
+    pub fn read_u16_part(&mut self, bits: u8) -> u16 {
+        let mut a = 0u16;
+        let mut b = 0u16;
+
+        match (bits + 7) / 8 {
+            1 => {
+                a = self.in_read_byte(bits) as u16;
+            },
+            2 => {
+                a = self.in_read_byte(8) as u16;
+                b = self.in_read_byte(bits - 8) as u16;
+            },
+            _ => {
+                //panic!("Must read between 1 and 32 bits.")
+            }
         }
+
+        (a | (b << 8)) as u16
     }
 
     pub fn write_i16(&mut self, value: i16) {
@@ -145,11 +193,11 @@ impl BitBuf {
         self.read_i16_part(16)
     }
 
-    fn write_i16_part(&mut self, value: i16, bits: u16) {
+    fn write_i16_part(&mut self, value: i16, bits: u8) {
         self.write_u16_part(value as u16, bits);
     }
 
-    fn read_i16_part(&mut self, bits: u16) -> i16 {
+    fn read_i16_part(&mut self, bits: u8) -> i16 {
         self.read_u16_part(bits) as i16
     }
 
@@ -161,7 +209,7 @@ impl BitBuf {
         self.read_u32_part(32)
     }
 
-    pub fn write_u32_part(&mut self, value: u32, bits: u16) {
+    pub fn write_u32_part(&mut self, value: u32, bits: u8) {
         let a = (value >> 0) as u8;
         let b = (value >> 8) as u8;
         let c = (value >> 16) as u8;
@@ -192,7 +240,7 @@ impl BitBuf {
         }
     }
 
-    pub fn read_u32_part(&mut self, bits: u16) -> u32 {
+    pub fn read_u32_part(&mut self, bits: u8) -> u32 {
         let mut a = 0i32;
         let mut b = 0i32;
         let mut c = 0i32;
@@ -233,11 +281,11 @@ impl BitBuf {
         self.write_i32_part(value, 32);
     }
 
-    fn write_i32_part(&mut self, value: i32, bits: u16) {
+    fn write_i32_part(&mut self, value: i32, bits: u8) {
         self.write_u32_part(value as u32, bits);
     }
 
-    fn read_i32_part(&mut self, bits: u16) -> i32 {
+    fn read_i32_part(&mut self, bits: u8) -> i32 {
         self.read_u32_part(bits) as i32
     }
 
@@ -249,7 +297,7 @@ impl BitBuf {
         self.read_u64_part(64)
     }
 
-    pub fn write_u64_part(&mut self, value: u64, bits: u16) {
+    pub fn write_u64_part(&mut self, value: u64, bits: u8) {
         if bits <= 32 {
             self.write_u32_part((value & 0xFFFFFFFF) as u32, bits);
         } else {
@@ -258,7 +306,7 @@ impl BitBuf {
         }
     }
 
-    pub fn read_u64_part(&mut self, bits: u16) -> u64 {
+    pub fn read_u64_part(&mut self, bits: u8) -> u64 {
         if bits <= 32 {
             self.read_u32_part(bits) as u64
         } else {
@@ -276,11 +324,11 @@ impl BitBuf {
         self.read_u64_part(64) as i64
     }
 
-    fn write_i64_part(&mut self, value: i64, bits: u16) {
+    fn write_i64_part(&mut self, value: i64, bits: u8) {
         self.write_u64_part(value as u64, bits);
     }
 
-    fn read_i64_part(&mut self, bits: u16) -> i64 {
+    fn read_i64_part(&mut self, bits: u8) -> i64 {
         self.read_u64_part(bits) as i64
     }
 
@@ -326,8 +374,23 @@ impl BitBuf {
         }.trans_to_f64()
     }
 
-    fn in_write_byte(&mut self, mut value: u8, bits: u16) {
-        //if bits == 0 { panic!("Cannot write 0 bits."); }
+    pub fn write_u8_slice(&mut self, value: &[u8]) {
+        for i in range(0, value.len()) {
+            self.in_write_byte(value[i], 8);
+        }
+    }
+
+    pub fn write_string(&mut self, value: &str) {
+        self.write_u32(value.len() as u32);
+        self.write_u8_slice(value.as_bytes());
+    }
+
+    pub fn read_string(&mut self) -> String {
+        let len = self.read_u32() as usize;
+        String::from_utf8((0..len).map(|_| self.in_read_byte(8)).collect()).unwrap()
+    }
+
+    fn in_write_byte(&mut self, mut value: u8, bits: u8) {
         value = value & (0xFF >> (8 - bits));
 
         let p = (self.pos >> 3) as usize;
@@ -340,13 +403,13 @@ impl BitBuf {
             self.buf[p] = (self.buf[p] & mask) | (value << bits_used);
         } else {
             self.buf[p] = (self.buf[p] & (0xFF >> bits_free)) | (value << bits_used);
-            self.buf[p + 1] = (self.buf[p + 1] & (0xFF << (bits - bits_free))) | (value >> bits_free);
+            self.buf[p + 1] = (self.buf[p + 1] & (0xFF << (bits - bits_free as u8))) | (value >> bits_free);
         }
 
-        self.pos += bits;
+        self.pos += bits as usize;
     }
 
-    fn in_read_byte(&mut self, bits: u16) -> u8 {
+    fn in_read_byte(&mut self, bits: u8) -> u8 {
         let value: u8;
         let p = (self.pos >> 3) as usize;
         let bits_used = self.pos % 8;
@@ -355,7 +418,7 @@ impl BitBuf {
             value = self.buf[p];
         } else {
             let first = self.buf[p] >> bits_used;
-            let remainder = bits - (8 - bits_used);
+            let remainder = bits - (8 - bits_used as u8);
             if remainder < 1 {
                 value = first & (0xFF >> (8 - bits));
             } else {
@@ -364,15 +427,17 @@ impl BitBuf {
             }
         }
 
-        self.pos += bits;
+        self.pos += bits as usize;
         value
     }
 
 }
 
+
+
 #[test]
-fn bool_test() {
-    let mut buf = BitBuf::new();
+fn bool_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = true;
     buf.write_bool(testval);
     buf.pos = 0;
@@ -380,8 +445,8 @@ fn bool_test() {
 }
 
 #[test]
-fn u8_test() {
-    let mut buf = BitBuf::new();
+fn u8_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = 211;
     buf.write_u8(testval);
     buf.pos = 0;
@@ -389,8 +454,8 @@ fn u8_test() {
 }
 
 #[test]
-fn u8_part_test() {
-    let mut buf = BitBuf::new();
+fn u8_part_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = 15;
     buf.write_u8_part(testval, 4);
     buf.pos = 0;
@@ -398,8 +463,8 @@ fn u8_part_test() {
 }
 
 #[test]
-fn i8_part_test() {
-    let mut buf = BitBuf::new();
+fn i8_part_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = 6;
     buf.write_i8_part(testval, 4);
     buf.pos = 0;
@@ -407,8 +472,8 @@ fn i8_part_test() {
 }
 
 #[test]
-fn i8_test() {
-    let mut buf = BitBuf::new();
+fn i8_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = -109;
     buf.write_i8(testval);
     buf.pos = 0;
@@ -416,8 +481,8 @@ fn i8_test() {
 }
 
 #[test]
-fn u16_test() {
-    let mut buf = BitBuf::new();
+fn u16_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = 34507;
     buf.write_u16(testval);
     buf.pos = 0;
@@ -425,17 +490,19 @@ fn u16_test() {
 }
 
 #[test]
-fn u16_part_test() {
-    let mut buf = BitBuf::new();
-    let testval = 903;
-    buf.write_u16_part(testval, 12);
+fn u16_part_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
+    let testval = 448;
+    buf.write_u16_part(testval, 13);
     buf.pos = 0;
-    assert!(buf.read_u16_part(12) == testval);
+    let result = buf.read_u16_part(13);
+    println!("{}", result);
+    assert!(result == testval);
 }
 
 #[test]
-fn i16_test() {
-    let mut buf = BitBuf::new();
+fn i16_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = -11066;
     buf.write_i16(testval);
     buf.pos = 0;
@@ -443,8 +510,8 @@ fn i16_test() {
 }
 
 #[test]
-fn i16_part_test() {
-    let mut buf = BitBuf::new();
+fn i16_part_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = 10034;
     buf.write_i16_part(testval, 15);
     buf.pos = 0;
@@ -452,8 +519,8 @@ fn i16_part_test() {
 }
 
 #[test]
-fn u32_test() {
-    let mut buf = BitBuf::new();
+fn u32_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = 193772;
     buf.write_u32(testval);
     buf.pos = 0;
@@ -461,8 +528,8 @@ fn u32_test() {
 }
 
 #[test]
-fn u32_part_test() {
-    let mut buf = BitBuf::new();
+fn u32_part_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = 839011;
     buf.write_u32_part(testval, 27);
     buf.pos = 0;
@@ -470,8 +537,8 @@ fn u32_part_test() {
 }
 
 #[test]
-fn i32_part_test() {
-    let mut buf = BitBuf::new();
+fn i32_part_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = 54397;
     buf.write_i32_part(testval, 22);
     buf.pos = 0;
@@ -479,8 +546,8 @@ fn i32_part_test() {
 }
 
 #[test]
-fn i32_test() {
-    let mut buf = BitBuf::new();
+fn i32_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = -23498225;
     buf.write_i32(testval);
     buf.pos = 0;
@@ -488,8 +555,8 @@ fn i32_test() {
 }
 
 #[test]
-fn u64_part_test() {
-    let mut buf = BitBuf::new();
+fn u64_part_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = 32944949231715;
     buf.write_u64_part(testval, 59);
     buf.pos = 0;
@@ -497,8 +564,8 @@ fn u64_part_test() {
 }
 
 #[test]
-fn u64_test() {
-    let mut buf = BitBuf::new();
+fn u64_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = 248394023907611;
     buf.write_u64(testval);
     buf.pos = 0;
@@ -506,8 +573,8 @@ fn u64_test() {
 }
 
 #[test]
-fn i64_part_test() {
-    let mut buf = BitBuf::new();
+fn i64_part_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = 1998372011;
     buf.write_i64_part(testval, 50);
     buf.pos = 0;
@@ -515,8 +582,8 @@ fn i64_part_test() {
 }
 
 #[test]
-fn i64_test() {
-    let mut buf = BitBuf::new();
+fn i64_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = -24839402390;
     buf.write_i64(testval);
     buf.pos = 0;
@@ -524,8 +591,8 @@ fn i64_test() {
 }
 
 #[test]
-fn f32_test() {
-    let mut buf = BitBuf::new();
+fn f32_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = 3.0393124f32;
     buf.write_f32(testval);
     buf.pos = 0;
@@ -533,11 +600,139 @@ fn f32_test() {
 }
 
 #[test]
-fn f64_test() {
-    let mut buf = BitBuf::new();
+fn f64_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
     let testval = 3.0395831239485302f64;
     buf.write_f64(testval);
     buf.pos = 0;
     assert!(buf.read_f64() == testval);
 }
 
+#[test]
+fn string_writeread_equal() {
+    let mut buf = BitBuf::with_len(1400);
+    let testval = "This is a test string. Nothing to see here. No, really!";
+    buf.write_string(testval);
+    buf.pos = 0;
+    assert!(buf.read_string() == testval);
+}
+
+
+
+extern crate test;
+use test::Bencher;
+
+#[bench]
+fn bitbuf_create_bench(b: &mut Bencher) {
+    b.iter(|| {
+        let mut buf = BitBuf::with_len(1400);
+    })
+}
+
+#[bench]
+fn in_byte_write1400_bench(b: &mut Bencher) {
+    let mut buf = BitBuf::with_len(1400);
+    b.iter(|| {
+        buf.pos = 0;
+        for _ in 0..1400 {
+            buf.in_write_byte(240, 8);
+        }
+    })
+}
+
+#[bench]
+fn string_write1400_bench(b: &mut Bencher) {
+    let mut buf = BitBuf::with_len(1400);
+    b.iter(|| {
+        buf.pos = 0;
+        for _ in 0..50 {
+            buf.write_string("This is a string. Woo!!!");
+        }
+    })
+}
+
+#[bench]
+fn string_read1400_bench(b: &mut Bencher) {
+    let mut buf = BitBuf::with_len(1400);
+    for _ in 0..50 {
+        buf.write_string("This is a string. Woo!!!");
+    }
+    b.iter(|| {
+        buf.pos = 0;
+        for _ in 0..50 {
+            let s = buf.read_string();
+        }
+    })
+}
+
+#[bench]
+fn i32_write1400_bench(b: &mut Bencher) {
+    let mut buf = BitBuf::with_len(1400);
+    b.iter(|| {
+        buf.pos = 0;
+        for _ in 0..350 {
+            buf.write_i32(123239012);
+        }
+    })
+}
+
+#[bench]
+fn i64_write1400_bench(b: &mut Bencher) {
+    let mut buf = BitBuf::with_len(1400);
+    b.iter(|| {
+        buf.pos = 0;
+        for _ in 0..175 {
+            buf.write_i64(12352390123458);
+        }
+    })
+}
+
+#[bench]
+fn i64_read1400_bench(b: &mut Bencher) {
+    let mut buf = BitBuf::with_len(1400);
+    for _ in 0..175 {
+        buf.write_i64(12352390123458);
+    }
+    b.iter(|| {
+        buf.pos = 0;
+        for _ in 0..175 {
+            let i = buf.read_i64();
+        }
+    })
+}
+
+#[bench]
+fn f32_write1400_bench(b: &mut Bencher) {
+    let mut buf = BitBuf::with_len(1400);
+    b.iter(|| {
+        buf.pos = 0;
+        for _ in 0..350 {
+            buf.write_f32(123.239012f32);
+        }
+    })
+}
+
+#[bench]
+fn f64_write1400_bench(b: &mut Bencher) {
+    let mut buf = BitBuf::with_len(1400);
+    b.iter(|| {
+        buf.pos = 0;
+        for _ in 0..175 {
+            buf.write_f64(1235.2390123458f64);
+        }
+    })
+}
+
+#[bench]
+fn f64_read1400_bench(b: &mut Bencher) {
+    let mut buf = BitBuf::with_len(1400);
+    for _ in 0..175 {
+        buf.write_f64(1235.2390123458f64);
+    }
+    b.iter(|| {
+        buf.pos = 0;
+        for _ in 0..175 {
+            let f = buf.read_f64();
+        }
+    })
+}
