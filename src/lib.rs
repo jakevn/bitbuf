@@ -2,11 +2,11 @@
 #![feature(test)]
 use std::mem::transmute;
 
-pub trait WriteToBitbuf {
-	fn write_to_bitbuf(self, buf: &mut BitBuf);
+pub trait WriteToBitBuf {
+	fn write_to_bitbuf(&self, buf: &mut BitBuf);
 }
 
-pub trait FromBitbuf {
+pub trait FromBitBuf {
     fn from_bitbuf(buf: &mut BitBuf) -> Self;
 }
 
@@ -40,7 +40,7 @@ struct EightByte {
 
 impl EightByte {
     pub fn trans_from_f64(value: f64) -> EightByte {
-        unsafe { transmute::<f64, EightByte>(value) } 
+        unsafe { transmute::<f64, EightByte>(value) }
     }
 
     pub fn trans_to_f64(self) -> f64 {
@@ -380,6 +380,10 @@ impl BitBuf {
         }
     }
 
+    pub fn read_vec_u8(&mut self, length: usize) -> Vec<u8> {
+        (0..length).map(|_| self.in_read_byte(8)).collect()
+    }
+
     pub fn write_string(&mut self, value: &str) {
         self.write_u32(value.len() as u32);
         self.write_u8_slice(value.as_bytes());
@@ -387,28 +391,35 @@ impl BitBuf {
 
     pub fn read_string(&mut self) -> String {
         let len = self.read_u32() as usize;
-        String::from_utf8((0..len).map(|_| self.in_read_byte(8)).collect()).unwrap()
+        String::from_utf8(self.read_vec_u8(len)).unwrap()
     }
 
+    #[inline(always)]
     fn in_write_byte(&mut self, mut value: u8, bits: u8) {
         value = value & (0xFF >> (8 - bits));
 
         let p = (self.pos >> 3) as usize;
         let bits_used = self.pos & 0x7;
-        let bits_free = 8 - bits_used;
-        let bits_left: i16 = bits_free as i16 - bits as i16;
 
-        if bits_left >= 0 {
-            let mask = (0xFF >> bits_free) | (0xFF << (8 - bits_left));
-            self.buf[p] = (self.buf[p] & mask) | (value << bits_used);
+        if bits_used == 0 {
+            self.buf[p] = value;
         } else {
-            self.buf[p] = (self.buf[p] & (0xFF >> bits_free)) | (value << bits_used);
-            self.buf[p + 1] = (self.buf[p + 1] & (0xFF << (bits - bits_free as u8))) | (value >> bits_free);
+            let bits_free = 8 - bits_used;
+            let bits_left: i16 = bits_free as i16 - bits as i16;
+
+            if bits_left >= 0 {
+                let mask = (0xFF >> bits_free) | (0xFF << (8 - bits_left));
+                self.buf[p] = (self.buf[p] & mask) | (value << bits_used);
+            } else {
+                self.buf[p] = (self.buf[p] & (0xFF >> bits_free)) | (value << bits_used);
+                self.buf[p + 1] = (self.buf[p + 1] & (0xFF << (bits - bits_free as u8))) | (value >> bits_free);
+            }
         }
 
         self.pos += bits as usize;
     }
 
+    #[inline(always)]
     fn in_read_byte(&mut self, bits: u8) -> u8 {
         let value: u8;
         let p = (self.pos >> 3) as usize;
@@ -622,6 +633,74 @@ fn string_writeread_equal() {
 extern crate test;
 use test::Bencher;
 
+struct BenchPerson {
+    first_name: String,
+    last_name: String,
+    age: i8,
+    alive: bool,
+    weight: i16,
+}
+
+impl WriteToBitBuf for BenchPerson {
+    fn write_to_bitbuf(&self, buf: &mut BitBuf) {
+        buf.write_string(&self.first_name);
+        buf.write_string(&self.last_name);
+        buf.write_i8(self.age);
+        buf.write_bool(self.alive);
+        buf.write_i16(self.weight);
+    }
+}
+
+impl FromBitBuf for BenchPerson {
+    fn from_bitbuf(buf: &mut BitBuf) -> BenchPerson {
+        BenchPerson {
+            first_name: buf.read_string(),
+            last_name: buf.read_string(),
+            age: buf.read_i8(),
+            alive: buf.read_bool(),
+            weight: buf.read_i16(),
+        }
+    }
+}
+#[bench]
+fn benchperson_write1400_bench(b: &mut Bencher) {
+    let mut buf = BitBuf::with_len(1400);
+    let person = BenchPerson {
+        first_name: String::from_str("John"),
+        last_name: String::from_str("Johnson"),
+        age: 47,
+        alive: true,
+        weight: 203,
+    };
+    b.iter(|| {
+        buf.pos = 0;
+        for _ in 0..63 {
+            person.write_to_bitbuf(&mut buf);
+        }
+    })
+}
+
+#[bench]
+fn benchperson_read1400_bench(b: &mut Bencher) {
+    let mut buf = BitBuf::with_len(1400);
+    let person = BenchPerson {
+        first_name: String::from_str("John"),
+        last_name: String::from_str("Johnson"),
+        age: 47,
+        alive: true,
+        weight: 203,
+    };
+    for _ in 0..63 {
+        person.write_to_bitbuf(&mut buf);
+    }
+    b.iter(|| {
+        buf.pos = 0;
+        for _ in 0..63 {
+            let p: BenchPerson = FromBitBuf::from_bitbuf(&mut buf);
+        }
+    })
+}
+
 #[bench]
 fn bitbuf_create_bench(b: &mut Bencher) {
     b.iter(|| {
@@ -636,6 +715,20 @@ fn in_byte_write1400_bench(b: &mut Bencher) {
         buf.pos = 0;
         for _ in 0..1400 {
             buf.in_write_byte(240, 8);
+        }
+    })
+}
+
+#[bench]
+fn in_byte_read1400_bench(b: &mut Bencher) {
+    let mut buf = BitBuf::with_len(1400);
+    for _ in 0..1400 {
+            buf.in_write_byte(240, 8);
+    }
+    b.iter(|| {
+        buf.pos = 0;
+        for _ in 0..1400 {
+            let b = buf.in_read_byte(8);
         }
     })
 }
