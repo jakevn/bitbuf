@@ -1,5 +1,3 @@
-#![feature(core)]
-#![feature(test)]
 use std::mem::transmute;
 
 pub trait WriteToBitBuf {
@@ -75,9 +73,9 @@ impl BitBuf {
     }
 
     /// Returns a slice into the underlying Vec<u8> buffer.
-    pub fn buf_as_slice(&self) -> &[u8] {
-        self.buf.as_slice()
-    }
+    //pub fn buf_as_slice(&self) -> &[u8] {
+    //    self.buf.as_slice()
+    //}
 
     /// The current bit size of the Vec<u8>.
     pub fn bit_size(&self) -> usize {
@@ -375,7 +373,7 @@ impl BitBuf {
     }
 
     pub fn write_u8_slice(&mut self, value: &[u8]) {
-        for i in range(0, value.len()) {
+        for i in 0..value.len() {
             self.in_write_byte(value[i], 8);
         }
     }
@@ -627,11 +625,6 @@ fn string_writeread_equal() {
     buf.pos = 0;
     assert!(buf.read_string() == testval);
 }
-
-
-
-extern crate test;
-use test::Bencher;
 
 struct BenchPerson {
     first_name: String,
