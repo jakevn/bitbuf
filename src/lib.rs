@@ -626,199 +626,199 @@ fn string_writeread_equal() {
     assert!(buf.read_string() == testval);
 }
 
-struct BenchPerson {
-    first_name: String,
-    last_name: String,
-    age: i8,
-    alive: bool,
-    weight: i16,
-}
-
-impl WriteToBitBuf for BenchPerson {
-    fn write_to_bitbuf(&self, buf: &mut BitBuf) {
-        buf.write_string(&self.first_name);
-        buf.write_string(&self.last_name);
-        buf.write_i8(self.age);
-        buf.write_bool(self.alive);
-        buf.write_i16(self.weight);
-    }
-}
-
-impl FromBitBuf for BenchPerson {
-    fn from_bitbuf(buf: &mut BitBuf) -> BenchPerson {
-        BenchPerson {
-            first_name: buf.read_string(),
-            last_name: buf.read_string(),
-            age: buf.read_i8(),
-            alive: buf.read_bool(),
-            weight: buf.read_i16(),
-        }
-    }
-}
-#[bench]
-fn benchperson_write1400_bench(b: &mut Bencher) {
-    let mut buf = BitBuf::with_len(1400);
-    let person = BenchPerson {
-        first_name: String::from_str("John"),
-        last_name: String::from_str("Johnson"),
-        age: 47,
-        alive: true,
-        weight: 203,
-    };
-    b.iter(|| {
-        buf.pos = 0;
-        for _ in 0..63 {
-            person.write_to_bitbuf(&mut buf);
-        }
-    })
-}
-
-#[bench]
-fn benchperson_read1400_bench(b: &mut Bencher) {
-    let mut buf = BitBuf::with_len(1400);
-    let person = BenchPerson {
-        first_name: String::from_str("John"),
-        last_name: String::from_str("Johnson"),
-        age: 47,
-        alive: true,
-        weight: 203,
-    };
-    for _ in 0..63 {
-        person.write_to_bitbuf(&mut buf);
-    }
-    b.iter(|| {
-        buf.pos = 0;
-        for _ in 0..63 {
-            let p: BenchPerson = FromBitBuf::from_bitbuf(&mut buf);
-        }
-    })
-}
-
-#[bench]
-fn bitbuf_create_bench(b: &mut Bencher) {
-    b.iter(|| {
-        let mut buf = BitBuf::with_len(1400);
-    })
-}
-
-#[bench]
-fn in_byte_write1400_bench(b: &mut Bencher) {
-    let mut buf = BitBuf::with_len(1400);
-    b.iter(|| {
-        buf.pos = 0;
-        for _ in 0..1400 {
-            buf.in_write_byte(240, 8);
-        }
-    })
-}
-
-#[bench]
-fn in_byte_read1400_bench(b: &mut Bencher) {
-    let mut buf = BitBuf::with_len(1400);
-    for _ in 0..1400 {
-            buf.in_write_byte(240, 8);
-    }
-    b.iter(|| {
-        buf.pos = 0;
-        for _ in 0..1400 {
-            let b = buf.in_read_byte(8);
-        }
-    })
-}
-
-#[bench]
-fn string_write1400_bench(b: &mut Bencher) {
-    let mut buf = BitBuf::with_len(1400);
-    b.iter(|| {
-        buf.pos = 0;
-        for _ in 0..50 {
-            buf.write_string("This is a string. Woo!!!");
-        }
-    })
-}
-
-#[bench]
-fn string_read1400_bench(b: &mut Bencher) {
-    let mut buf = BitBuf::with_len(1400);
-    for _ in 0..50 {
-        buf.write_string("This is a string. Woo!!!");
-    }
-    b.iter(|| {
-        buf.pos = 0;
-        for _ in 0..50 {
-            let s = buf.read_string();
-        }
-    })
-}
-
-#[bench]
-fn i32_write1400_bench(b: &mut Bencher) {
-    let mut buf = BitBuf::with_len(1400);
-    b.iter(|| {
-        buf.pos = 0;
-        for _ in 0..350 {
-            buf.write_i32(123239012);
-        }
-    })
-}
-
-#[bench]
-fn i64_write1400_bench(b: &mut Bencher) {
-    let mut buf = BitBuf::with_len(1400);
-    b.iter(|| {
-        buf.pos = 0;
-        for _ in 0..175 {
-            buf.write_i64(12352390123458);
-        }
-    })
-}
-
-#[bench]
-fn i64_read1400_bench(b: &mut Bencher) {
-    let mut buf = BitBuf::with_len(1400);
-    for _ in 0..175 {
-        buf.write_i64(12352390123458);
-    }
-    b.iter(|| {
-        buf.pos = 0;
-        for _ in 0..175 {
-            let i = buf.read_i64();
-        }
-    })
-}
-
-#[bench]
-fn f32_write1400_bench(b: &mut Bencher) {
-    let mut buf = BitBuf::with_len(1400);
-    b.iter(|| {
-        buf.pos = 0;
-        for _ in 0..350 {
-            buf.write_f32(123.239012f32);
-        }
-    })
-}
-
-#[bench]
-fn f64_write1400_bench(b: &mut Bencher) {
-    let mut buf = BitBuf::with_len(1400);
-    b.iter(|| {
-        buf.pos = 0;
-        for _ in 0..175 {
-            buf.write_f64(1235.2390123458f64);
-        }
-    })
-}
-
-#[bench]
-fn f64_read1400_bench(b: &mut Bencher) {
-    let mut buf = BitBuf::with_len(1400);
-    for _ in 0..175 {
-        buf.write_f64(1235.2390123458f64);
-    }
-    b.iter(|| {
-        buf.pos = 0;
-        for _ in 0..175 {
-            let f = buf.read_f64();
-        }
-    })
-}
+//struct BenchPerson {
+//    first_name: String,
+//    last_name: String,
+//    age: i8,
+//    alive: bool,
+//    weight: i16,
+//}
+//
+//impl WriteToBitBuf for BenchPerson {
+//    fn write_to_bitbuf(&self, buf: &mut BitBuf) {
+//        buf.write_string(&self.first_name);
+//        buf.write_string(&self.last_name);
+//        buf.write_i8(self.age);
+//        buf.write_bool(self.alive);
+//        buf.write_i16(self.weight);
+//    }
+//}
+//
+//impl FromBitBuf for BenchPerson {
+//    fn from_bitbuf(buf: &mut BitBuf) -> BenchPerson {
+//        BenchPerson {
+//            first_name: buf.read_string(),
+//            last_name: buf.read_string(),
+//            age: buf.read_i8(),
+//            alive: buf.read_bool(),
+//            weight: buf.read_i16(),
+//        }
+//    }
+//}
+//#[bench]
+//fn benchperson_write1400_bench(b: &mut Bencher) {
+//    let mut buf = BitBuf::with_len(1400);
+//    let person = BenchPerson {
+//        first_name: String::from_str("John"),
+//        last_name: String::from_str("Johnson"),
+//        age: 47,
+//        alive: true,
+//        weight: 203,
+//    };
+//    b.iter(|| {
+//        buf.pos = 0;
+//        for _ in 0..63 {
+//            person.write_to_bitbuf(&mut buf);
+//        }
+//    })
+//}
+//
+//#[bench]
+//fn benchperson_read1400_bench(b: &mut Bencher) {
+//    let mut buf = BitBuf::with_len(1400);
+//    let person = BenchPerson {
+//        first_name: String::from_str("John"),
+//        last_name: String::from_str("Johnson"),
+//        age: 47,
+//        alive: true,
+//        weight: 203,
+//    };
+//    for _ in 0..63 {
+//        person.write_to_bitbuf(&mut buf);
+//    }
+//    b.iter(|| {
+//        buf.pos = 0;
+//        for _ in 0..63 {
+//            let p: BenchPerson = FromBitBuf::from_bitbuf(&mut buf);
+//        }
+//    })
+//}
+//
+//#[bench]
+//fn bitbuf_create_bench(b: &mut Bencher) {
+//    b.iter(|| {
+//        let mut buf = BitBuf::with_len(1400);
+//    })
+//}
+//
+//#[bench]
+//fn in_byte_write1400_bench(b: &mut Bencher) {
+//    let mut buf = BitBuf::with_len(1400);
+//    b.iter(|| {
+//        buf.pos = 0;
+//        for _ in 0..1400 {
+//            buf.in_write_byte(240, 8);
+//        }
+//    })
+//}
+//
+//#[bench]
+//fn in_byte_read1400_bench(b: &mut Bencher) {
+//    let mut buf = BitBuf::with_len(1400);
+//    for _ in 0..1400 {
+//            buf.in_write_byte(240, 8);
+//    }
+//    b.iter(|| {
+//        buf.pos = 0;
+//        for _ in 0..1400 {
+//            let b = buf.in_read_byte(8);
+//        }
+//    })
+//}
+//
+//#[bench]
+//fn string_write1400_bench(b: &mut Bencher) {
+//    let mut buf = BitBuf::with_len(1400);
+//    b.iter(|| {
+//        buf.pos = 0;
+//        for _ in 0..50 {
+//            buf.write_string("This is a string. Woo!!!");
+//        }
+//    })
+//}
+//
+//#[bench]
+//fn string_read1400_bench(b: &mut Bencher) {
+//    let mut buf = BitBuf::with_len(1400);
+//    for _ in 0..50 {
+//        buf.write_string("This is a string. Woo!!!");
+//    }
+//    b.iter(|| {
+//        buf.pos = 0;
+//        for _ in 0..50 {
+//            let s = buf.read_string();
+//        }
+//    })
+//}
+//
+//#[bench]
+//fn i32_write1400_bench(b: &mut Bencher) {
+//    let mut buf = BitBuf::with_len(1400);
+//    b.iter(|| {
+//        buf.pos = 0;
+//        for _ in 0..350 {
+//            buf.write_i32(123239012);
+//        }
+//    })
+//}
+//
+//#[bench]
+//fn i64_write1400_bench(b: &mut Bencher) {
+//    let mut buf = BitBuf::with_len(1400);
+//    b.iter(|| {
+//        buf.pos = 0;
+//        for _ in 0..175 {
+//            buf.write_i64(12352390123458);
+//        }
+//    })
+//}
+//
+//#[bench]
+//fn i64_read1400_bench(b: &mut Bencher) {
+//    let mut buf = BitBuf::with_len(1400);
+//    for _ in 0..175 {
+//        buf.write_i64(12352390123458);
+//    }
+//    b.iter(|| {
+//        buf.pos = 0;
+//        for _ in 0..175 {
+//            let i = buf.read_i64();
+//        }
+//    })
+//}
+//
+//#[bench]
+//fn f32_write1400_bench(b: &mut Bencher) {
+//    let mut buf = BitBuf::with_len(1400);
+//    b.iter(|| {
+//        buf.pos = 0;
+//        for _ in 0..350 {
+//            buf.write_f32(123.239012f32);
+//        }
+//    })
+//}
+//
+//#[bench]
+//fn f64_write1400_bench(b: &mut Bencher) {
+//    let mut buf = BitBuf::with_len(1400);
+//    b.iter(|| {
+//        buf.pos = 0;
+//        for _ in 0..175 {
+//            buf.write_f64(1235.2390123458f64);
+//        }
+//    })
+//}
+//
+//#[bench]
+//fn f64_read1400_bench(b: &mut Bencher) {
+//    let mut buf = BitBuf::with_len(1400);
+//    for _ in 0..175 {
+//        buf.write_f64(1235.2390123458f64);
+//    }
+//    b.iter(|| {
+//        buf.pos = 0;
+//        for _ in 0..175 {
+//            let f = buf.read_f64();
+//        }
+//    })
+//}
