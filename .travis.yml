@@ -2,5 +2,7 @@ language: rust
 rust:
   - stable
 
+script: ./.travis.sh
+
 notifications:
   email: false
