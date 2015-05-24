@@ -45,6 +45,7 @@ impl EightByte {
         unsafe { transmute::<EightByte, f64>(self) }
     }
 }
+
 #[derive(Clone)]
 pub struct BitBuf {
     buf: Vec<u8>,
@@ -87,6 +88,10 @@ impl BitBuf {
     /// at the cursor position during writing.
     pub fn bit_pos(&self) -> usize {
         self.pos
+    }
+
+    pub fn byte_pos(&self) -> usize {
+        self.pos / 8
     }
 
     pub fn can_write_bits(&self, bit_size: usize) -> bool {
