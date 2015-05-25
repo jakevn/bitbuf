@@ -95,11 +95,11 @@ impl BitBuf {
     }
 
     pub fn can_write_bits(&self, bit_count: usize) -> bool {
-        (bit_size + self.pos) < self.size
+        (bit_count + self.pos) < self.size
     }
 
     pub fn can_read_bits(&self, bit_count: usize) -> bool {
-        (bit_size + self.pos) < self.size
+        (bit_count + self.pos) < self.size
     }
 
     pub fn can_write_bytes(&self, byte_count: usize) -> bool {
